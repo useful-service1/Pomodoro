@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomodoro Timer</title>
+<link rel="icon" type="image/png" href="img/logo-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Cairo:wght@400;600;800&display=swap" rel="stylesheet">
+<script>
+  // Apply saved theme/language before the page paints (avoids a flash)
+  (function () {
+    try {
+      var th = localStorage.getItem("pomodoro-theme");
+      if (th === "dark" || th === "light") document.documentElement.setAttribute("data-theme", th);
+    } catch (e) {}
+  })();
+</script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #1f1517;
+    --muted: #6f6467;
+    --line: #e7e0e1;
+    --work: #b3121f;
+    --break: #1b7a52;
+    --on-accent: #ffffff;
+    --accent: var(--work);
+    --font: "Bricolage Grotesque", "Segoe UI", system-ui, -apple-system, sans-serif;
+    color-scheme: light;
+  }
+  html[data-theme="dark"] {
+    --bg: #131012;
+    --ink: #f4eded;
+    --muted: #a99ea1;
+    --line: #3a3236;
+    --work: #ff5b68;
+    --break: #3fd592;
+    --on-accent: #131012;
+    color-scheme: dark;
+  }
+  html[lang="ar"] { --font: "Cairo", "Segoe UI", Tahoma, system-ui, sans-serif; }
+  body.phase-break { --accent: var(--break); }
+
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--font);
+    color: var(--ink);
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  header {
+    width: 100%;
+    max-width: 760px;
+    padding: 24px 24px 0;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  header img { width: 52px; height: 52px; border-radius: 14px; display: block; flex: none; }
+  header h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+
+  .tools { margin-inline-start: auto; display: flex; align-items: center; gap: 10px; }
+  .lang {
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--bg);
+    border: 2px solid var(--line);
+    border-radius: 999px;
+    padding: 9px 14px;
+    cursor: pointer;
+  }
+  .lang:hover { border-color: var(--ink); }
+  .lang:focus-visible, .theme-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .theme-btn {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .theme-btn:hover { border-color: var(--ink); }
+  .theme-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .theme-btn .sun { display: none; }
+  html[data-theme="dark"] .theme-btn .sun { display: block; }
+  html[data-theme="dark"] .theme-btn .moon { display: none; }
+
+  main {
+    flex: 1;
+    width: 100%;
+    max-width: 760px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .hidden { display: none !important; }
+
+  /* ---------- Setup ---------- */
+  .lead {
+    font-size: clamp(1.9rem, 5vw, 2.9rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    margin-bottom: 34px;
+    max-width: 14em;
+  }
+  html[lang="ar"] .lead { letter-spacing: 0; line-height: 1.3; }
+  .groups {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-bottom: 30px;
+  }
+  fieldset { border: 0; padding: 0; min-width: 0; }
+  legend { font-size: 1.05rem; font-weight: 600; margin-bottom: 14px; padding: 0; }
+  .work-group legend { color: var(--work); }
+  .break-group legend { color: var(--break); }
+  .repeat-group legend { color: var(--ink); }
+
+  .pair {
+    direction: ltr;
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    border-top: 3px solid var(--line);
+    padding-top: 14px;
+  }
+  .work-group .pair { border-top-color: var(--work); }
+  .break-group .pair { border-top-color: var(--break); }
+  .repeat-group .pair { border-top-color: var(--ink); }
+
+  .field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+  .field label { font-size: 0.9rem; color: var(--muted); }
+  .field input {
+    width: 100%;
+    font: inherit;
+    font-size: clamp(2.4rem, 7vw, 3.6rem);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    padding: 0 0 2px;
+    outline: none;
+    -moz-appearance: textfield;
+  }
+  .field input::-webkit-outer-spin-button,
+  .field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .field input:focus-visible { border-bottom-color: var(--ink); }
+  .colon { font-size: clamp(2.4rem, 7vw, 3.6rem); font-weight: 800; line-height: 1; padding-bottom: 6px; color: var(--line); }
+
+  .repeat-row { margin-bottom: 26px; max-width: 360px; }
+  .repeat-row .pair { align-items: center; }
+  .repeat-row .field { flex: 0 1 auto; width: 110px; }
+  .step {
+    font: inherit;
+    font-size: 1.6rem;
+    font-weight: 600;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    line-height: 1;
+  }
+  .step:hover { background: var(--ink); color: var(--bg); }
+  .step:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .hint { font-size: 0.9rem; color: var(--muted); margin-top: 10px; }
+
+  .error { min-height: 1.4em; margin-bottom: 18px; font-weight: 600; color: var(--work); }
+
+  .btn {
+    font: inherit;
+    font-weight: 600;
+    font-size: 1.05rem;
+    border-radius: 999px;
+    padding: 14px 28px;
+    cursor: pointer;
+    border: 2px solid var(--ink);
+    color: var(--ink);
+    background: transparent;
+    transition: transform 0.12s ease, background-color 0.2s ease, color 0.2s ease;
+  }
+  .btn:hover { background: var(--ink); color: var(--bg); }
+  .btn:active { transform: scale(0.97); }
+  .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+    padding: 16px 44px;
+    font-size: 1.2rem;
+    font-weight: 800;
+  }
+  .btn.primary:hover { filter: brightness(0.9); }
+
+  /* ---------- Timer ---------- */
+  .timer-view, .done-view { align-items: center; text-align: center; }
+  .ring-wrap {
+    position: relative;
+    width: min(78vw, 340px);
+    aspect-ratio: 1;
+    margin: 0 auto 28px;
+  }
+  .ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .track { fill: none; stroke: var(--line); stroke-width: 14; }
+  .progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 14;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.25s linear, stroke 0.4s ease;
+  }
+  .ring-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .phase-label { font-size: 1.15rem; font-weight: 600; color: var(--accent); }
+  .time {
+    direction: ltr;
+    font-size: clamp(3.4rem, 15vw, 5.4rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .round { color: var(--muted); margin-bottom: 26px; font-weight: 600; }
+  .controls { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  .done-view h2 { font-size: clamp(2rem, 6vw, 3rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 10px; color: var(--break); }
+  html[lang="ar"] .done-view h2 { letter-spacing: 0; }
+  .done-view p { color: var(--muted); margin-bottom: 28px; }
+
+
+  @media (max-width: 560px) {
+    .groups { grid-template-columns: 1fr; gap: 28px; }
+    header { padding-top: 18px; }
+    header h1 { font-size: 1.25rem; }
+    header img { width: 44px; height: 44px; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body class="phase-work">
+
+<header>
+  <div class="brand">
+    <img src="img/logo-icon.png" alt="Pomodoro logo">
+    <h1>Pomodoro</h1>
+  </div>
+  <div class="tools">
+    <select class="lang" id="lang" aria-label="Language">
+      <option value="en">English</option>
+      <option value="fr">Français</option>
+      <option value="ar">العربية</option>
+    </select>
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch to dark mode">
+      <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- Setup -->
+  <section id="setup" aria-labelledby="lead">
+    <h2 class="lead" id="lead" data-i18n="lead">Set your study and break time.</h2>
+
+    <div class="groups">
+      <fieldset class="work-group">
+        <legend data-i18n="study">Study / work</legend>
+        <div class="pair">
+          <div class="field">
+            <label for="workMin" data-i18n="minutes">Minutes</label>
+            <input id="workMin" type="number" inputmode="numeric" min="0" max="999" value="25">
+          </div>
+          <span class="colon" aria-hidden="true">:</span>
+          <div class="field">
+            <label for="workSec" data-i18n="seconds">Seconds</label>
+            <input id="workSec" type="number" inputmode="numeric" min="0" max="59" value="25">
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset class="break-group">
+        <legend data-i18n="break">Break</legend>
+        <div class="pair">
+          <div class="field">
+            <label for="breakMin" data-i18n="minutes">Minutes</label>
+            <input id="breakMin" type="number" inputmode="numeric" min="0" max="999" value="5">
+          </div>
+          <span class="colon" aria-hidden="true">:</span>
+          <div class="field">
+            <label for="breakSec" data-i18n="seconds">Seconds</label>
+            <input id="breakSec" type="number" inputmode="numeric" min="0" max="59" value="25">
+          </div>
+        </div>
+      </fieldset>
+    </div>
+
+    <fieldset class="repeat-group repeat-row">
+      <legend data-i18n="repeats">Repeats</legend>
+      <div class="pair">
+        <button class="step" id="repMinus" type="button" data-i18n-aria="fewer" aria-label="Fewer repeats">−</button>
+        <div class="field">
+          <label for="repeats" data-i18n="rounds">Rounds</label>
+          <input id="repeats" type="number" inputmode="numeric" min="1" max="99" value="4">
+        </div>
+        <button class="step" id="repPlus" type="button" data-i18n-aria="more" aria-label="More repeats">+</button>
+      </div>
+      <p class="hint" data-i18n="hint">One round is one study session followed by one break.</p>
+    </fieldset>
+
+    <p class="error" id="error" role="alert"></p>
+    <button class="btn primary" id="startBtn" type="button" data-i18n="start">Start</button>
+  </section>
+
+  <!-- Timer -->
+  <section id="timer" class="timer-view hidden" aria-label="Timer">
+    <div class="ring-wrap">
+      <svg viewBox="0 0 320 320" aria-hidden="true">
+        <circle class="track" cx="160" cy="160" r="140"/>
+        <circle class="progress" id="progress" cx="160" cy="160" r="140"/>
+      </svg>
+      <div class="ring-text">
+        <span class="phase-label" id="phaseLabel">Study time</span>
+        <span class="time" id="time">25:00</span>
+      </div>
+    </div>
+    <p class="round" id="round">Round 1 of 4</p>
+    <div class="controls">
+      <button class="btn" id="pauseBtn" type="button">Pause</button>
+      <button class="btn" id="skipBtn" type="button" data-i18n="skip">Skip</button>
+      <button class="btn" id="resetBtn" type="button" data-i18n="reset">Reset</button>
+    </div>
+  </section>
+
+  <!-- Done -->
+  <section id="done" class="done-view hidden" aria-label="Finished">
+    <h2 data-i18n="doneTitle">All rounds complete</h2>
+    <p id="doneText"></p>
+    <button class="btn primary" id="againBtn" type="button" data-i18n="again">Set a new session</button>
+  </section>
+</main>
+
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ================= Translations ================= */
+  var I18N = {
+    en: {
+      appTitle: "Pomodoro Timer",
+      lead: "Set your study and break time.",
+      study: "Study / work", "break": "Break",
+      minutes: "Minutes", seconds: "Seconds",
+      repeats: "Repeats", rounds: "Rounds",
+      hint: "One round is one study session followed by one break.",
+      fewer: "Fewer repeats", more: "More repeats",
+      start: "Start", pause: "Pause", resume: "Resume", skip: "Skip", reset: "Reset",
+      studyTime: "Study time", breakTime: "Break time",
+      round: "Round {n} of {total}",
+      doneTitle: "All rounds complete",
+      doneOne: "You finished {n} round.", doneMany: "You finished {n} rounds.",
+      again: "Set a new session",
+      error: "Set at least 1 second for both study time and break time.",
+      toDark: "Switch to dark mode", toLight: "Switch to light mode",
+      language: "Language", logoAlt: "Pomodoro logo",
+      study_short: "Study", break_short: "Break", done_short: "Done"
+    },
+    fr: {
+      appTitle: "Minuteur Pomodoro",
+      lead: "Choisissez votre temps d’étude et de pause.",
+      study: "Étude / travail", "break": "Pause",
+      minutes: "Minutes", seconds: "Secondes",
+      repeats: "Répétitions", rounds: "Tours",
+      hint: "Une répétition = une session d’étude suivie d’une pause.",
+      fewer: "Moins de répétitions", more: "Plus de répétitions",
+      start: "Démarrer", pause: "Pause", resume: "Reprendre", skip: "Passer", reset: "Réinitialiser",
+      studyTime: "Temps d’étude", breakTime: "Temps de pause",
+      round: "Tour {n} sur {total}",
+      doneTitle: "Tous les tours sont terminés",
+      doneOne: "Vous avez terminé {n} tour.", doneMany: "Vous avez terminé {n} tours.",
+      again: "Nouvelle session",
+      error: "Réglez au moins 1 seconde pour l’étude et pour la pause.",
+      toDark: "Passer en mode sombre", toLight: "Passer en mode clair",
+      language: "Langue", logoAlt: "Logo Pomodoro",
+      study_short: "Étude", break_short: "Pause", done_short: "Terminé"
+    },
+    ar: {
+      appTitle: "مؤقّت بومودورو",
+      lead: "حدّد وقت الدراسة ووقت الاستراحة.",
+      study: "دراسة / عمل", "break": "استراحة",
+      minutes: "دقائق", seconds: "ثوانٍ",
+      repeats: "التكرارات", rounds: "الجولات",
+      hint: "التكرار الواحد هو جلسة دراسة تليها استراحة.",
+      fewer: "تكرارات أقل", more: "تكرارات أكثر",
+      start: "ابدأ", pause: "إيقاف مؤقت", resume: "استئناف", skip: "تخطّي", reset: "إعادة ضبط",
+      studyTime: "وقت الدراسة", breakTime: "وقت الاستراحة",
+      round: "الجولة {n} من {total}",
+      doneTitle: "اكتملت جميع الجولات",
+      doneOne: "لقد أنهيت {n} جولة.", doneMany: "لقد أنهيت {n} جولات.",
+      again: "جلسة جديدة",
+      error: "حدّد ثانية واحدة على الأقل لوقت الدراسة ووقت الاستراحة.",
+      toDark: "التبديل إلى الوضع الداكن", toLight: "التبديل إلى الوضع الفاتح",
+      language: "اللغة", logoAlt: "شعار بومودورو",
+      study_short: "دراسة", break_short: "استراحة", done_short: "تم"
+    }
+  };
+
+  var lang = "en";
+  try {
+    var savedLang = localStorage.getItem("pomodoro-lang");
+    if (I18N[savedLang]) lang = savedLang;
+  } catch (e) {}
+
+  function t(key, vars) {
+    var s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+    if (vars) for (var k in vars) s = s.replace("{" + k + "}", vars[k]);
+    return s;
+  }
+
+  /* ================= Elements & state ================= */
+  var setup = $("setup"), timerView = $("timer"), doneView = $("done");
+  var timeEl = $("time"), phaseLabel = $("phaseLabel"), roundEl = $("round");
+  var progress = $("progress"), pauseBtn = $("pauseBtn"), errorEl = $("error");
+
+  var C = 2 * Math.PI * 140;
+  progress.style.strokeDasharray = C;
+
+  var state = {
+    phase: "work",
+    durations: { work: 0, "break": 0 },
+    endTime: 0,
+    remaining: 0,
+    running: false,
+    round: 1,
+    totalRounds: 1,
+    tickId: null,
+    screen: "setup",     // "setup" | "timer" | "done"
+    errorShown: false
+  };
+
+  /* ================= Sounds (synthesized, no files needed) ================= */
+  var audioCtx = null;
+
+  function ensureAudio() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        audioCtx = audioCtx || new AC();
+        if (audioCtx.state === "suspended") audioCtx.resume();
+      }
+    } catch (e) {}
+  }
+
+  // One note with a smooth attack and decay
+  function tone(freq, at, dur, o) {
+    o = o || {};
+    var osc = audioCtx.createOscillator();
+    var g = audioCtx.createGain();
+    var t0 = audioCtx.currentTime + at;
+    var vol = o.vol || 0.25, atk = o.attack || 0.01;
+    osc.type = o.type || "sine";
+    osc.frequency.setValueAtTime(freq, t0);
+    if (o.glideTo) osc.frequency.exponentialRampToValueAtTime(o.glideTo, t0 + dur);
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(vol, t0 + atk);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(t0); osc.stop(t0 + dur + 0.05);
+  }
+
+  // A soft bell: fundamental + two inharmonic overtones that fade faster
+  function bell(freq, at, dur, vol) {
+    vol = vol || 0.28;
+    tone(freq, at, dur, { vol: vol });
+    tone(freq * 2.76, at, dur * 0.5, { vol: vol * 0.3 });
+    tone(freq * 5.4, at, dur * 0.25, { vol: vol * 0.12 });
+  }
+
+  function play(fn) {
+    if (!audioCtx) return;
+    try { fn(); } catch (e) {}
+  }
+
+  // START: a quick rising "whoosh" ending in a bright ping  ->  "go!"
+  function soundStart() {
+    play(function () {
+      tone(300, 0, 0.24, { type: "sine", glideTo: 1000, vol: 0.22, attack: 0.03 });
+      bell(1318.5, 0.22, 0.7, 0.26);
+    });
+  }
+
+  // STUDY FINISHED: three calm, falling bell notes  ->  "well done, relax"
+  function soundWorkEnd() {
+    play(function () {
+      bell(784, 0.0, 1.3);     // G5
+      bell(659.3, 0.38, 1.3);  // E5
+      bell(523.3, 0.76, 1.8);  // C5
+    });
+  }
+
+  // BREAK FINISHED: three sharp digital beeps + a high long beep  ->  "back to work!"
+  function soundBreakEnd() {
+    play(function () {
+      for (var i = 0; i < 3; i++) tone(988, i * 0.2, 0.13, { type: "square", vol: 0.1, attack: 0.005 });
+      tone(1319, 0.7, 0.55, { type: "square", vol: 0.1, attack: 0.005 });
+    });
+  }
+
+  // ALL ROUNDS DONE: a happy rising fanfare with a held chord
+  function soundAllDone() {
+    play(function () {
+      bell(523.3, 0.0, 0.8);
+      bell(659.3, 0.15, 0.8);
+      bell(784, 0.3, 0.8);
+      bell(1046.5, 0.45, 2.0);
+      bell(659.3, 0.45, 2.0, 0.16);
+      bell(784, 0.45, 2.0, 0.16);
+    });
+  }
+
+  /* ================= Helpers ================= */
+  function clamp(n, min, max) {
+    n = parseInt(n, 10);
+    if (isNaN(n)) n = min;
+    return Math.min(max, Math.max(min, n));
+  }
+
+  function readInputs() {
+    var wm = clamp($("workMin").value, 0, 999), ws = clamp($("workSec").value, 0, 59);
+    var bm = clamp($("breakMin").value, 0, 999), bs = clamp($("breakSec").value, 0, 59);
+    var rp = clamp($("repeats").value, 1, 99);
+    $("workMin").value = wm; $("workSec").value = ws;
+    $("breakMin").value = bm; $("breakSec").value = bs;
+    $("repeats").value = rp;
+    return { work: (wm * 60 + ws) * 1000, brk: (bm * 60 + bs) * 1000, rounds: rp };
+  }
+
+  function format(ms) {
+    var total = Math.max(0, Math.ceil(ms / 1000));
+    var m = Math.floor(total / 60), s = total % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  /* ================= Rendering ================= */
+  function setDocTitle() {
+    if (state.screen === "timer") {
+      var ms = state.running ? Math.max(0, state.endTime - Date.now()) : state.remaining;
+      document.title = format(ms) + " · " + t(state.phase === "work" ? "study_short" : "break_short");
+    } else if (state.screen === "done") {
+      document.title = t("done_short") + " · Pomodoro";
+    } else {
+      document.title = t("appTitle");
+    }
+  }
+
+  function render() {
+    var ms = state.running ? Math.max(0, state.endTime - Date.now()) : state.remaining;
+    var total = state.durations[state.phase];
+    timeEl.textContent = format(ms);
+    progress.style.strokeDashoffset = C * (1 - ms / total);
+    setDocTitle();
+  }
+
+  function applyPhase() {
+    document.body.className = "phase-" + state.phase;
+    phaseLabel.textContent = t(state.phase === "work" ? "studyTime" : "breakTime");
+    roundEl.textContent = t("round", { n: state.round, total: state.totalRounds });
+  }
+
+  function updatePauseLabel() {
+    pauseBtn.textContent = t(state.running ? "pause" : "resume");
+  }
+
+  function applyLanguage() {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+    $("lang").value = lang;
+    $("lang").setAttribute("aria-label", t("language"));
+    document.querySelector("header img").alt = t("logoAlt");
+
+    var nodes = document.querySelectorAll("[data-i18n]");
+    for (var i = 0; i < nodes.length; i++) nodes[i].textContent = t(nodes[i].getAttribute("data-i18n"));
+    var aria = document.querySelectorAll("[data-i18n-aria]");
+    for (var j = 0; j < aria.length; j++) aria[j].setAttribute("aria-label", t(aria[j].getAttribute("data-i18n-aria")));
+
+    if (state.errorShown) errorEl.textContent = t("error");
+    if (state.screen === "timer") { applyPhase(); updatePauseLabel(); render(); }
+    if (state.screen === "done") {
+      $("doneText").textContent = t(state.totalRounds === 1 ? "doneOne" : "doneMany", { n: state.totalRounds });
+    }
+    updateThemeLabel();
+    setDocTitle();
+  }
+
+  /* ================= Theme ================= */
+  function updateThemeLabel() {
+    var dark = document.documentElement.getAttribute("data-theme") === "dark";
+    $("themeBtn").setAttribute("aria-label", t(dark ? "toLight" : "toDark"));
+  }
+
+  function toggleTheme() {
+    var dark = document.documentElement.getAttribute("data-theme") === "dark";
+    var next = dark ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", next);
+    try { localStorage.setItem("pomodoro-theme", next); } catch (e) {}
+    updateThemeLabel();
+  }
+
+  /* ================= Timer logic ================= */
+  function startPhase(phase) {
+    state.phase = phase;
+    state.remaining = state.durations[phase];
+    state.endTime = Date.now() + state.remaining;
+    state.running = true;
+    applyPhase();
+    updatePauseLabel();
+    render();
+  }
+
+  function showScreen(name) {
+    state.screen = name;
+    setup.classList.toggle("hidden", name !== "setup");
+    timerView.classList.toggle("hidden", name !== "timer");
+    doneView.classList.toggle("hidden", name !== "done");
+  }
+
+  function finish(natural) {
+    clearInterval(state.tickId);
+    state.running = false;
+    document.body.className = "phase-break";
+    $("doneText").textContent = t(state.totalRounds === 1 ? "doneOne" : "doneMany", { n: state.totalRounds });
+    showScreen("done");
+    setDocTitle();
+    if (natural) soundAllDone();
+  }
+
+  function nextPhase(natural) {
+    if (state.phase === "work") {
+      if (natural) soundWorkEnd();
+      startPhase("break");
+    } else if (state.round >= state.totalRounds) {
+      finish(natural);
+    } else {
+      if (natural) soundBreakEnd();
+      state.round += 1;
+      startPhase("work");
+    }
+  }
+
+  function tick() {
+    if (!state.running) return;
+    if (state.endTime - Date.now() <= 0) nextPhase(true);
+    else render();
+  }
+
+  function start() {
+    var v = readInputs();
+    if (v.work < 1000 || v.brk < 1000) {
+      state.errorShown = true;
+      errorEl.textContent = t("error");
+      return;
+    }
+    state.errorShown = false;
+    errorEl.textContent = "";
+    ensureAudio();
+
+    state.durations.work = v.work;
+    state.durations["break"] = v.brk;
+    state.totalRounds = v.rounds;
+    state.round = 1;
+
+    showScreen("timer");
+    startPhase("work");
+    soundStart();
+
+    clearInterval(state.tickId);
+    state.tickId = setInterval(tick, 200);
+  }
+
+  function togglePause() {
+    if (state.running) {
+      state.remaining = Math.max(0, state.endTime - Date.now());
+      state.running = false;
+    } else {
+      state.endTime = Date.now() + state.remaining;
+      state.running = true;
+    }
+    updatePauseLabel();
+    render();
+  }
+
+  function reset() {
+    clearInterval(state.tickId);
+    state.running = false;
+    state.phase = "work";
+    document.body.className = "phase-work";
+    showScreen("setup");
+    setDocTitle();
+  }
+
+  function stepRepeats(d) {
+    $("repeats").value = clamp(clamp($("repeats").value, 1, 99) + d, 1, 99);
+  }
+
+  /* ================= Events ================= */
+  $("startBtn").addEventListener("click", start);
+  pauseBtn.addEventListener("click", togglePause);
+  $("skipBtn").addEventListener("click", function () { nextPhase(false); });
+  $("resetBtn").addEventListener("click", reset);
+  $("againBtn").addEventListener("click", reset);
+  $("repMinus").addEventListener("click", function () { stepRepeats(-1); });
+  $("repPlus").addEventListener("click", function () { stepRepeats(1); });
+  $("themeBtn").addEventListener("click", toggleTheme);
+  $("lang").addEventListener("change", function () {
+    lang = this.value;
+    try { localStorage.setItem("pomodoro-lang", lang); } catch (e) {}
+    applyLanguage();
+  });
+
+  ["workMin", "workSec", "breakMin", "breakSec", "repeats"].forEach(function (id) {
+    $(id).addEventListener("keydown", function (e) { if (e.key === "Enter") start(); });
+    $(id).addEventListener("focus", function () { this.select(); });
+  });
+
+  applyLanguage();
+})();
+</script>
+</body>
+</html>
