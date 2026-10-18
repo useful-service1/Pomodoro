@@ -252,7 +252,27 @@
 
   .done-view h2 { font-size: clamp(2rem, 6vw, 3rem); font-weight: 800; letter-spacing: -0.03em; margin-bottom: 10px; color: var(--break); }
   html[lang="ar"] .done-view h2 { letter-spacing: 0; }
-  .done-view p { color: var(--muted); margin-bottom: 28px; }
+  .done-view p { color: var(--muted); margin-bottom: 22px; }
+  .summary {
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto 28px;
+    text-align: start;
+    border-top: 3px solid var(--break);
+  }
+  .summary .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 18px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .summary dt { color: var(--muted); }
+  .summary dd { font-weight: 600; text-align: end; }
+  .summary .row.total { border-bottom: 0; padding-top: 16px; }
+  .summary .row.total dt, .summary .row.total dd { color: var(--ink); font-weight: 800; font-size: 1.1rem; }
+  .summary .row.group { margin-top: 10px; }
 
 
   @media (max-width: 560px) {
@@ -362,6 +382,7 @@
   <section id="done" class="done-view hidden" aria-label="Finished">
     <h2 data-i18n="doneTitle">All rounds complete</h2>
     <p id="doneText"></p>
+    <dl class="summary" id="summary"></dl>
     <button class="btn primary" id="againBtn" type="button" data-i18n="again">Set a new session</button>
   </section>
 </main>
@@ -393,7 +414,14 @@
       study_short: "Study", break_short: "Break", done_short: "Done",
       sayStart: "Your study session has started.",
       sayWorkEnd: "You completed your study session.",
-      sayBreakEnd: "Your break is over. Time to study."
+      sayBreakEnd: "Your break is over. Time to study.",
+      sumRounds: "Rounds completed", sumStudySessions: "Study sessions", sumBreakSessions: "Break sessions",
+      sumStudyEach: "Each study session", sumBreakEach: "Each break",
+      sumStudyTotal: "Total study time", sumBreakTotal: "Total break time",
+      sumTotal: "Total time (study + break)", sumStarted: "Started at", sumFinished: "Finished at",
+      cntStudyOne: "{n} study session", cntStudyMany: "{n} study sessions",
+      cntBreakOne: "{n} break session", cntBreakMany: "{n} break sessions",
+      sayDone: "You completed the last break. You finished {study} and {brk}. Your total study time was {studyTime}, your total break time was {breakTime}, and altogether it took {total}."
     },
     fr: {
       appTitle: "Minuteur Pomodoro",
@@ -415,7 +443,14 @@
       study_short: "Étude", break_short: "Pause", done_short: "Terminé",
       sayStart: "Votre session d’étude a commencé.",
       sayWorkEnd: "Vous avez terminé votre session d’étude.",
-      sayBreakEnd: "Votre pause est terminée. C’est l’heure d’étudier."
+      sayBreakEnd: "Votre pause est terminée. C’est l’heure d’étudier.",
+      sumRounds: "Tours terminés", sumStudySessions: "Sessions d’étude", sumBreakSessions: "Pauses",
+      sumStudyEach: "Chaque session d’étude", sumBreakEach: "Chaque pause",
+      sumStudyTotal: "Temps d’étude total", sumBreakTotal: "Temps de pause total",
+      sumTotal: "Temps total (étude + pause)", sumStarted: "Début", sumFinished: "Fin",
+      cntStudyOne: "{n} session d’étude", cntStudyMany: "{n} sessions d’étude",
+      cntBreakOne: "{n} pause", cntBreakMany: "{n} pauses",
+      sayDone: "Vous avez terminé la dernière pause. Vous avez fait {study} et {brk}. Votre temps d’étude total était de {studyTime}, votre temps de pause total était de {breakTime}, et au total, cela a duré {total}."
     },
     ar: {
       appTitle: "مؤقّت بومودورو",
@@ -437,7 +472,14 @@
       study_short: "دراسة", break_short: "استراحة", done_short: "تم",
       sayStart: "بدأت جلسة الدراسة.",
       sayWorkEnd: "لقد أنهيت جلسة الدراسة.",
-      sayBreakEnd: "انتهت الاستراحة. حان وقت الدراسة."
+      sayBreakEnd: "انتهت الاستراحة. حان وقت الدراسة.",
+      sumRounds: "الجولات المكتملة", sumStudySessions: "جلسات الدراسة", sumBreakSessions: "جلسات الاستراحة",
+      sumStudyEach: "كل جلسة دراسة", sumBreakEach: "كل استراحة",
+      sumStudyTotal: "إجمالي وقت الدراسة", sumBreakTotal: "إجمالي وقت الاستراحة",
+      sumTotal: "المدة الكلية (دراسة + استراحة)", sumStarted: "وقت البدء", sumFinished: "وقت الانتهاء",
+      cntStudyOne: "{n} جلسة دراسة", cntStudyMany: "{n} جلسة دراسة",
+      cntBreakOne: "{n} استراحة", cntBreakMany: "{n} استراحة",
+      sayDone: "لقد أنهيت آخر استراحة. أكملت {study} و{brk}. إجمالي وقت الدراسة {studyTime}، وإجمالي وقت الاستراحة {breakTime}، والمدة الكلية {total}."
     }
   };
 
@@ -471,7 +513,8 @@
     totalRounds: 1,
     tickId: null,
     screen: "setup",     // "setup" | "timer" | "done"
-    errorShown: false
+    errorShown: false,
+    stats: null
   };
 
   /* ================= Sounds (synthesized, no files needed) ================= */
@@ -578,10 +621,10 @@
     return notFemale[0] || list[0];
   }
 
-  function speak(key) {
+  function speak(key, rawText) {
     if (!hasSpeech) return;
     try {
-      var u = new SpeechSynthesisUtterance(t(key));
+      var u = new SpeechSynthesisUtterance(rawText || t(key));
       var v = pickVoice();
       if (v) { u.voice = v; u.lang = v.lang; } else { u.lang = LANG_CODES[lang] || "en-US"; }
       u.pitch = 1.15;   // slightly higher pitch for a younger sound
@@ -593,9 +636,9 @@
   }
 
   // Say a phrase a moment after the chime so the two don't overlap
-  function speakLater(key, seconds) {
+  function speakLater(key, seconds, rawText) {
     clearTimeout(voiceTimer);
-    voiceTimer = setTimeout(function () { speak(key); }, seconds * 1000);
+    voiceTimer = setTimeout(function () { speak(key, rawText); }, seconds * 1000);
   }
 
   function stopVoice() {
@@ -624,6 +667,89 @@
     var total = Math.max(0, Math.ceil(ms / 1000));
     var m = Math.floor(total / 60), s = total % 60;
     return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  /* ================= Session summary ================= */
+  function numLocale() { return lang === "ar" ? "ar-u-nu-latn" : lang; }
+
+  // e.g. "1 hour, 5 minutes, and 30 seconds" in the page language
+  function durationText(ms) {
+    var total = Math.round(ms / 1000);
+    var h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), sec = total % 60;
+    var parts = [];
+    try {
+      var loc = numLocale();
+      var u = function (n, unit) {
+        return new Intl.NumberFormat(loc, { style: "unit", unit: unit, unitDisplay: "long" }).format(n);
+      };
+      if (h) parts.push(u(h, "hour"));
+      if (m) parts.push(u(m, "minute"));
+      if (sec || !parts.length) parts.push(u(sec, "second"));
+      return new Intl.ListFormat(loc, { style: "long", type: "conjunction" }).format(parts);
+    } catch (e) {
+      parts = [];
+      if (h) parts.push(h + " h");
+      if (m) parts.push(m + " min");
+      if (sec || !parts.length) parts.push(sec + " s");
+      return parts.join(" ");
+    }
+  }
+
+  // Add the phase that just ended to the running totals
+  function recordPhase(natural) {
+    if (!state.stats) return;
+    var d = state.durations[state.phase];
+    var left = state.running ? Math.max(0, state.endTime - Date.now()) : state.remaining;
+    var elapsed = natural ? d : Math.max(0, d - left);
+    if (!natural && elapsed < 1000) return;   // skipped right away: not counted
+    if (state.phase === "work") { state.stats.studySessions++; state.stats.studyMs += elapsed; }
+    else { state.stats.breakSessions++; state.stats.breakMs += elapsed; }
+  }
+
+  function clockText(ms) {
+    try { return new Date(ms).toLocaleTimeString(numLocale(), { hour: "2-digit", minute: "2-digit" }); }
+    catch (e) { return ""; }
+  }
+
+  function renderSummary() {
+    var st = state.stats;
+    if (!st) return;
+    var rows = [
+      ["sumRounds", String(state.totalRounds)],
+      ["sumStudySessions", String(st.studySessions)],
+      ["sumBreakSessions", String(st.breakSessions)],
+      ["sumStudyEach", durationText(state.durations.work)],
+      ["sumBreakEach", durationText(state.durations["break"])],
+      ["sumStudyTotal", durationText(st.studyMs)],
+      ["sumBreakTotal", durationText(st.breakMs)],
+      ["sumTotal", durationText(st.studyMs + st.breakMs), "total"],
+      ["sumStarted", clockText(st.startedAt)],
+      ["sumFinished", clockText(st.finishedAt)]
+    ];
+    var box = $("summary");
+    box.innerHTML = "";
+    rows.forEach(function (r) {
+      var row = document.createElement("div");
+      row.className = "row" + (r[2] ? " " + r[2] : "");
+      var dt = document.createElement("dt");
+      var dd = document.createElement("dd");
+      dt.textContent = t(r[0]);
+      dd.textContent = r[1];
+      row.appendChild(dt); row.appendChild(dd);
+      box.appendChild(row);
+    });
+  }
+
+  // What the voice says at the very end
+  function doneSpeech() {
+    var st = state.stats;
+    return t("sayDone", {
+      study: t(st.studySessions === 1 ? "cntStudyOne" : "cntStudyMany", { n: st.studySessions }),
+      brk: t(st.breakSessions === 1 ? "cntBreakOne" : "cntBreakMany", { n: st.breakSessions }),
+      studyTime: durationText(st.studyMs),
+      breakTime: durationText(st.breakMs),
+      total: durationText(st.studyMs + st.breakMs)
+    });
   }
 
   /* ================= Rendering ================= */
@@ -672,6 +798,7 @@
     if (state.screen === "timer") { applyPhase(); updatePauseLabel(); render(); }
     if (state.screen === "done") {
       $("doneText").textContent = t(state.totalRounds === 1 ? "doneOne" : "doneMany", { n: state.totalRounds });
+      renderSummary();
     }
     updateThemeLabel();
     setDocTitle();
@@ -715,11 +842,15 @@
     document.body.className = "phase-break";
     $("doneText").textContent = t(state.totalRounds === 1 ? "doneOne" : "doneMany", { n: state.totalRounds });
     showScreen("done");
+    state.stats.finishedAt = Date.now();
+    renderSummary();
     setDocTitle();
-    if (natural) { soundAllDone(); speakLater("doneTitle", 1.3); }
+    if (natural) soundAllDone();
+    speakLater("", natural ? 1.6 : 0.2, doneSpeech());
   }
 
   function nextPhase(natural) {
+    recordPhase(natural);
     if (state.phase === "work") {
       if (natural) { soundWorkEnd(); speakLater("sayWorkEnd", 1.9); }
       startPhase("break");
@@ -753,6 +884,7 @@
     state.durations["break"] = v.brk;
     state.totalRounds = v.rounds;
     state.round = 1;
+    state.stats = { studySessions: 0, breakSessions: 0, studyMs: 0, breakMs: 0, startedAt: Date.now(), finishedAt: 0 };
 
     showScreen("timer");
     startPhase("work");
